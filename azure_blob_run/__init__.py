@@ -1,14 +1,23 @@
 import functools
+import json
+import logging
 import pathlib
 import re
+import subprocess
+import typing
 
 import pydantic
 import pydantic_settings
 import yarl
 from azure.storage.blob import BlobServiceClient, ContainerClient
+from rich.pretty import pretty_repr
 from str_or_none import str_or_none
 
 __version__ = pathlib.Path(__file__).parent.joinpath("VERSION").read_text().strip()
+
+
+logger = logging.getLogger(__name__)
+
 
 # Azure Blob Storage URL Example:
 # Account name must be lowercase and alphanumeric only.
@@ -77,7 +86,47 @@ def get_container_and_blob_name(url: yarl.URL | str) -> tuple[str, str]:
     return path_parts[0], path_parts[1]
 
 
-def run(blob_url: str, *, settings: Settings | None = None) -> str:
+def run_executable(
+    exec_filepath: pathlib.Path | str,
+    *arguments: pydantic.BaseModel | typing.Dict | typing.Text,
+    default: typing.Text = "",
+) -> typing.Text:
+    run_arguments = [exec_filepath]
+    for argument in arguments:
+        if isinstance(argument, pydantic.BaseModel):
+            run_arguments.extend(argument.model_dump_json())
+        elif isinstance(argument, typing.Text):
+            run_arguments.extend(argument)
+        elif isinstance(argument, typing.Dict):
+            run_arguments.extend(json.dumps(argument))
+        else:
+            raise ValueError(f"Invalid arguments type: {type(argument)}")
+    try:
+        result = subprocess.run([exec_filepath], capture_output=True, text=True)
+
+        if str_or_none(result.stderr):
+            logger.error(f"Error: {result.stderr}")
+
+        if result.returncode != 0:
+            logger.error(
+                "Execution returns non-zero code, "
+                + f"return default: {pretty_repr(default, max_string=32)}"
+            )
+            return default
+
+        return result.stdout
+
+    except Exception as e:
+        logger.error(f"Exception in run_executable_sync: {e!r}")
+        return default
+
+
+def run(
+    blob_url: str,
+    *arguments: pydantic.BaseModel | typing.Dict | typing.Text,
+    default: typing.Text = "",
+    settings: Settings | None = None,
+) -> str:
     url = yarl.URL(blob_url)
     settings = Settings() if settings is None else settings
 
@@ -95,9 +144,19 @@ def run(blob_url: str, *, settings: Settings | None = None) -> str:
             + f"but expected settings {settings.AZURE_BLOB_RUN_CONTAINER_NAME}"
         )
 
-    return (
-        settings.container_client.get_blob_client(blob_name)
-        .download_blob()
-        .readall()
-        .decode("utf-8")
+    target_file_path = pathlib.Path(settings.AZURE_BLOB_RUN_CACHE_PATH).joinpath(
+        blob_name.strip("/")
     )
+    target_file_path.mkdir(parents=True, exist_ok=True)
+
+    if not target_file_path.is_file():
+        logger.debug(f"Downloading blob '{blob_name}' to '{target_file_path}'")
+        blob_client = settings.container_client.get_blob_client(blob_name)
+        with open(target_file_path, "wb") as download_file:
+            download_stream = blob_client.download_blob()
+            download_stream.readinto(download_file)
+            logger.info(f"Downloaded blob '{blob_name}' to '{target_file_path}'")
+    else:
+        logger.debug(f"Blob '{blob_name}' already exists in '{target_file_path}'")
+
+    return run_executable(target_file_path, *arguments, default=default)
