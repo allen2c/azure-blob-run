@@ -27,6 +27,10 @@ update:
 	poetry export --without-hashes -f requirements.txt --output requirements.txt
 	poetry export --without-hashes -f requirements.txt --output requirements-all.txt --all-extras --all-groups
 
+# Services
+azurite-run:
+	azurite --location ~/azurite-data
+
 # Docs
 mkdocs:
 	mkdocs serve -a 0.0.0.0:8000

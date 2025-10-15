@@ -1,6 +1,12 @@
 [project]
 authors = [{ name = "Allen Chou", email = "f1470891079@gmail.com" }]
-dependencies = ["azure-storage-blob", "pydantic (>=2)", "str-or-none"]
+dependencies = [
+  "azure-storage-blob",
+  "pydantic (>=2)",
+  "pydantic-settings",
+  "str-or-none",
+  "yarl",
+]
 description = "Run Azure Blob Object"
 license = { text = "MIT" }
 name = "azure-blob-run"
@@ -22,6 +28,7 @@ all = []
 [tool.poetry.group.dev.dependencies]
 black = { extras = ["jupyter"], version = "*" }
 isort = "*"
+logging-bullet-train = "*"
 poetry-plugin-export = "*"
 pytest = "*"
 pytest-asyncio = "*"
