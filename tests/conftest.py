@@ -3,6 +3,7 @@ import pathlib
 import tempfile
 import typing
 
+import azure.core.exceptions
 import logging_bullet_train as lbt
 import pytest
 
@@ -12,6 +13,7 @@ if typing.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 lbt.set_logger(logger)
+lbt.set_logger("azure_blob_run")
 
 
 @pytest.fixture(scope="module")
@@ -27,7 +29,7 @@ def azure_blob_container_name():
 
 @pytest.fixture(scope="module")
 def azure_blob_name():
-    return "/utils/test.sh"
+    return "utils/test.sh"
 
 
 @pytest.fixture(scope="module")
@@ -43,10 +45,18 @@ def settings(azure_blob_container_name: str, temp_dir: str) -> "Settings":
 @pytest.fixture(scope="module")
 def azure_blob(settings: "Settings", azure_blob_name: str):
     blob_client = settings.container_client.get_blob_client(azure_blob_name)
-    with open(pathlib.Path(__file__).parent.joinpath("utils/test.sh"), "rb") as data:
-        blob_client.upload_blob(data)
+
+    try:
+        with open(
+            pathlib.Path(__file__).parent.joinpath("utils/echo.sh"), "rb"
+        ) as data:
+            blob_client.upload_blob(data)
+        logger.info(f"Uploaded blob '{azure_blob_name}'")
+    except azure.core.exceptions.ResourceExistsError:
+        logger.warning(f"Blob '{azure_blob_name}' already exists")
 
     yield
 
     # Clean up
     blob_client.delete_blob()
+    logger.info(f"Deleted blob '{azure_blob_name}'")
