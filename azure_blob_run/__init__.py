@@ -134,15 +134,16 @@ def run_executable(
     run_arguments = [exec_filepath]
     for argument in arguments:
         if isinstance(argument, pydantic.BaseModel):
-            run_arguments.extend(argument.model_dump_json())
+            run_arguments.append(argument.model_dump_json())
         elif isinstance(argument, typing.Text):
-            run_arguments.extend(argument)
+            run_arguments.append(argument)
         elif isinstance(argument, typing.Dict):
-            run_arguments.extend(json.dumps(argument))
+            run_arguments.append(json.dumps(argument))
         else:
             raise ValueError(f"Invalid arguments type: {type(argument)}")
+
     try:
-        result = subprocess.run([exec_filepath], capture_output=True, text=True)
+        result = subprocess.run(run_arguments, capture_output=True, text=True)
 
         if str_or_none(result.stderr):
             logger.error(f"Error: {result.stderr}")
@@ -150,7 +151,7 @@ def run_executable(
         if result.returncode != 0:
             logger.error(
                 "Execution returns non-zero code, "
-                + f"return default: {pretty_repr(default, max_string=32)}"
+                + f"return default: {pretty_repr(default, max_string=1000)}"
             )
             return default
 

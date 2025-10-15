@@ -5,9 +5,10 @@
 # Store all arguments in an array
 args=("$@")
 
-# Initialize arrays and associative array
+# Initialize arrays (using parallel arrays for key-value pairs)
 arguments=()
-declare -A keyword_arguments
+kw_keys=()
+kw_values=()
 
 # Parse arguments
 i=0
@@ -16,14 +17,16 @@ while [ $i -lt ${#args[@]} ]; do
 
   if [[ $arg == -* ]]; then
     # It's an option
-    option_name=$(echo "$arg" | sed 's/^-*//')
+    option_name="${arg#"${arg%%[!-]*}"}"
 
     if [ $((i + 1)) -ge ${#args[@]} ] || [[ ${args[$((i + 1))]} == -* ]]; then
       # Boolean flag
-      keyword_arguments["$option_name"]="true"
+      kw_keys+=("$option_name")
+      kw_values+=("true")
     else
       # Option with value
-      keyword_arguments["$option_name"]="${args[$((i + 1))]}"
+      kw_keys+=("$option_name")
+      kw_values+=("${args[$((i + 1))]}")
       i=$((i + 1))  # Consume the value
     fi
   else
@@ -60,19 +63,72 @@ cat <<EOF
   "keyword_arguments": {
 EOF
 
+# Build unique keys list and track processed keys
+declare -a processed_keys
 first=true
-for key in "${!keyword_arguments[@]}"; do
+
+for idx in "${!kw_keys[@]}"; do
+  key="${kw_keys[$idx]}"
+
+  # Check if this key has already been processed
+  already_processed=false
+  for pk in "${processed_keys[@]}"; do
+    if [ "$pk" = "$key" ]; then
+      already_processed=true
+      break
+    fi
+  done
+
+  if [ "$already_processed" = true ]; then
+    continue
+  fi
+
+  # Mark this key as processed
+  processed_keys+=("$key")
+
+  # Collect all values for this key
+  declare -a values_for_key
+  for idx2 in "${!kw_keys[@]}"; do
+    if [ "${kw_keys[$idx2]}" = "$key" ]; then
+      values_for_key+=("${kw_values[$idx2]}")
+    fi
+  done
+
+  # Output separator
   if [ "$first" = false ]; then
     echo "    ,"
   fi
-  val="${keyword_arguments[$key]}"
-  if [[ "$val" == "true" ]]; then
-    echo "    \"$key\": true"
+
+  # If only one value, output as string; if multiple, output as array
+  if [ ${#values_for_key[@]} -eq 1 ]; then
+    val="${values_for_key[0]}"
+    if [[ "$val" == "true" ]]; then
+      echo "    \"$key\": true"
+    else
+      escaped_val=$(escape_json "$val")
+      echo "    \"$key\": \"$escaped_val\""
+    fi
   else
-    escaped_val=$(escape_json "$val")
-    echo "    \"$key\": \"$escaped_val\""
+    # Multiple values - output as array
+    echo "    \"$key\": ["
+    val_first=true
+    for val in "${values_for_key[@]}"; do
+      if [ "$val_first" = false ]; then
+        echo "      ,"
+      fi
+      if [[ "$val" == "true" ]]; then
+        echo "      true"
+      else
+        escaped_val=$(escape_json "$val")
+        echo "      \"$escaped_val\""
+      fi
+      val_first=false
+    done
+    echo "    ]"
   fi
+
   first=false
+  unset values_for_key
 done
 
 cat <<EOF
