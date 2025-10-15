@@ -43,7 +43,7 @@ def settings(azure_blob_container_name: str, temp_dir: str) -> "Settings":
 
 
 @pytest.fixture(scope="module")
-def azure_blob(settings: "Settings", azure_blob_name: str):
+def temp_azure_blob(settings: "Settings", azure_blob_name: str):
     blob_client = settings.container_client.get_blob_client(azure_blob_name)
 
     try:

@@ -1,5 +1,15 @@
-from azure_blob_run import Settings
+import azure_blob_run
 
 
-def test_run(azure_blob_name: str, azure_blob: None, settings: Settings):
-    print(settings.model_dump_json())
+def test_run(
+    azure_blob_name: str, temp_azure_blob: None, settings: azure_blob_run.Settings
+):
+    assert temp_azure_blob is None
+
+    result = azure_blob_run.run(
+        settings.get_blob_url(azure_blob_name), settings=settings
+    )
+    print(result)
+    print(result)
+    print(result)
+    print(result)
