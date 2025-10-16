@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 EXAMPLE_AZURE_BLOB_URL = (
     "https://mystorageaccount.blob.core.windows.net/mycontainer/myblob.txt"
 )
+INVALID_AZURE_BLOB_URL_MSG = (
+    f"Invalid blob URL, valid example: {EXAMPLE_AZURE_BLOB_URL}"
+)
 AZURE_BLOB_URL_RE = re.compile(
     r"https://(?P<account_name>[a-z0-9]+)\.blob\.core\.windows\.net/(?P<container_name>[a-z0-9-]{3,63}+)/(?P<blob_name>.+)"  # noqa: E501
 )
@@ -39,7 +42,7 @@ def get_blob_url(account_name: str, container_name: str, blob_name: str) -> str:
     )
     valid_url = AZURE_BLOB_URL_RE.match(url)
     if valid_url is None:
-        raise ValueError(f"Invalid blob URL, valid example: {EXAMPLE_AZURE_BLOB_URL}")
+        raise ValueError(INVALID_AZURE_BLOB_URL_MSG)
     return url
 
 
@@ -47,15 +50,16 @@ def get_account_name(url: yarl.URL | str) -> str:
     url = yarl.URL(url) if isinstance(url, str) else url
 
     if url.host is None:
-        raise ValueError(f"Invalid blob URL, valid example: {EXAMPLE_AZURE_BLOB_URL}")
+        raise ValueError(INVALID_AZURE_BLOB_URL_MSG)
+
+    if is_azurite_url(url):
+        return "azurite"
 
     might_account_name = re.match(
         r"^(?P<account_name>[a-z0-9]+)\.blob\.core\.windows\.net$", url.host
     )
     if might_account_name is None:
-        raise ValueError(
-            f"Invalid blob URL: {url}, valid example: {EXAMPLE_AZURE_BLOB_URL}"
-        )
+        raise ValueError(INVALID_AZURE_BLOB_URL_MSG)
 
     return might_account_name.group("account_name")
 
@@ -63,9 +67,15 @@ def get_account_name(url: yarl.URL | str) -> str:
 def get_blob_parts(url: yarl.URL | str) -> tuple[str, str, str]:
     url = yarl.URL(url) if isinstance(url, str) else url
 
+    if is_azurite_url(url):
+        _path_parts = url.path.lstrip("/").split("/", 1)
+        if len(_path_parts) != 2:
+            raise ValueError(INVALID_AZURE_BLOB_URL_MSG)
+        return "azurite", _path_parts[0], _path_parts[1]
+
     match = AZURE_BLOB_URL_RE.match(str(url))
     if match is None:
-        raise ValueError(f"Invalid blob URL, valid example: {EXAMPLE_AZURE_BLOB_URL}")
+        raise ValueError(INVALID_AZURE_BLOB_URL_MSG)
 
     return (
         match.group("account_name"),
