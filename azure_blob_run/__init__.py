@@ -35,6 +35,8 @@ AZURE_BLOB_URL_PATTERN = (
     "https://{account_name}.blob.core.windows.net/{container_name}/{blob_name}"
 )
 
+AZURITE_ACCOUNT_NAME = "devstoreaccount1"
+
 
 def get_blob_url(account_name: str, container_name: str, blob_name: str) -> str:
     url = AZURE_BLOB_URL_PATTERN.format(
@@ -53,7 +55,7 @@ def get_account_name(url: yarl.URL | str) -> str:
         raise ValueError(INVALID_AZURE_BLOB_URL_MSG)
 
     if is_azurite_url(url):
-        return "azurite"
+        return AZURITE_ACCOUNT_NAME
 
     might_account_name = re.match(
         r"^(?P<account_name>[a-z0-9]+)\.blob\.core\.windows\.net$", url.host
@@ -68,10 +70,12 @@ def get_blob_parts(url: yarl.URL | str) -> tuple[str, str, str]:
     url = yarl.URL(url) if isinstance(url, str) else url
 
     if is_azurite_url(url):
-        _path_parts = url.path.lstrip("/").split("/", 1)
+        _path_parts = (
+            url.path.removeprefix(f"/{AZURITE_ACCOUNT_NAME}").lstrip("/").split("/", 1)
+        )
         if len(_path_parts) != 2:
             raise ValueError(INVALID_AZURE_BLOB_URL_MSG)
-        return "azurite", _path_parts[0], _path_parts[1]
+        return AZURITE_ACCOUNT_NAME, _path_parts[0], _path_parts[1]
 
     match = AZURE_BLOB_URL_RE.match(str(url))
     if match is None:
