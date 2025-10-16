@@ -128,7 +128,7 @@ class Settings(pydantic_settings.BaseSettings):
     def account_name(self) -> str:
         url = yarl.URL(self.blob_service_client.url)
         if is_azurite_url(url):
-            return "azurite"
+            return AZURITE_ACCOUNT_NAME
         else:
             return get_account_name(self.blob_service_client.url)
 
